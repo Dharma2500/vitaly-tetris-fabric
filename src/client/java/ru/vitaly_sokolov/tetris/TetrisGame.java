@@ -42,6 +42,10 @@ public final class TetrisGame {
     private boolean gameOver;
     private boolean resultRecorded;
     private long lastDropAt;
+    private static final long LINE_CLEAR_ANIMATION_MS = 165L;
+    private int[] clearingRows = new int[0];
+    private long lineClearStartedAt;
+    private long pausedAt;
 
     public void newGame() {
         board = new int[HEIGHT][WIDTH];
@@ -53,6 +57,9 @@ public final class TetrisGame {
         combo = 0;
         gameOver = false;
         resultRecorded = false;
+        clearingRows = new int[0];
+        lineClearStartedAt = 0L;
+        pausedAt = 0L;
         started = true;
         paused = false;
         lastDropAt = System.currentTimeMillis();
@@ -61,20 +68,34 @@ public final class TetrisGame {
     }
 
     public void resume() {
-        if (started && !gameOver) {
+        if (started && !gameOver && paused) {
+            long now = System.currentTimeMillis();
+            if (clearingRows.length > 0 && pausedAt > 0L) {
+                lineClearStartedAt += now - pausedAt;
+            }
             paused = false;
-            lastDropAt = System.currentTimeMillis();
+            pausedAt = 0L;
+            lastDropAt = now;
         }
     }
 
     public void pause() {
-        if (started && !gameOver) {
+        if (started && !gameOver && !paused) {
             paused = true;
+            pausedAt = System.currentTimeMillis();
         }
     }
 
     public void tick(long now) {
         if (!started || paused || gameOver) return;
+
+        if (clearingRows.length > 0) {
+            if (now - lineClearStartedAt >= LINE_CLEAR_ANIMATION_MS) {
+                finishLineClear();
+            }
+            return;
+        }
+
         if (now - lastDropAt >= getDropIntervalMs()) {
             lastDropAt = now;
             dropOne(false);
@@ -147,22 +168,21 @@ public final class TetrisGame {
             }
         }
 
-        int cleared = clearLines();
-        if (cleared > 0) {
-            int[] points = {0, 100, 300, 500, 800};
-            score += (long) points[Math.min(cleared, 4)] * level;
-            lines += cleared;
-            combo++;
-            if (combo > 1) score += (long) (combo - 1) * 50 * level;
-            level = Math.min(1000, 1 + lines / 10);
-        } else {
-            combo = 0;
+        int[] fullRows = findFullRows();
+        if (fullRows.length > 0) {
+            clearingRows = fullRows;
+            lineClearStartedAt = System.currentTimeMillis();
+            currentType = -1;
+            return;
         }
+
+        combo = 0;
         spawnNext();
     }
 
-    private int clearLines() {
-        int cleared = 0;
+    private int[] findFullRows() {
+        int[] rows = new int[HEIGHT];
+        int count = 0;
         for (int row = HEIGHT - 1; row >= 0; row--) {
             boolean full = true;
             for (int col = 0; col < WIDTH; col++) {
@@ -171,16 +191,33 @@ public final class TetrisGame {
                     break;
                 }
             }
-            if (full) {
-                cleared++;
-                for (int move = row; move > 0; move--) {
-                    board[move] = Arrays.copyOf(board[move - 1], WIDTH);
-                }
-                board[0] = new int[WIDTH];
-                row++;
-            }
+            if (full) rows[count++] = row;
         }
-        return cleared;
+        return Arrays.copyOf(rows, count);
+    }
+
+    private void finishLineClear() {
+        int cleared = clearingRows.length;
+        if (cleared == 0) return;
+
+        // Rows are stored bottom-to-top, so removing them in this order
+        // keeps the original indices valid while the board shifts downward.
+        for (int row : clearingRows) {
+            for (int move = row; move > 0; move--) {
+                board[move] = Arrays.copyOf(board[move - 1], WIDTH);
+            }
+            board[0] = new int[WIDTH];
+        }
+        clearingRows = new int[0];
+        lineClearStartedAt = 0L;
+
+        int[] points = {0, 100, 300, 500, 800};
+        score += (long) points[Math.min(cleared, 4)] * level;
+        lines += cleared;
+        combo++;
+        if (combo > 1) score += (long) (combo - 1) * 50 * level;
+        level = Math.min(1000, 1 + lines / 10);
+        spawnNext();
     }
 
     private void spawnNext() {
@@ -273,6 +310,15 @@ public final class TetrisGame {
     public int getLines() { return lines; }
     public int getLevel() { return level; }
     public int getCombo() { return combo; }
+    public boolean isLineClearAnimating() { return clearingRows.length > 0; }
+    public int[] getClearingRows() { return Arrays.copyOf(clearingRows, clearingRows.length); }
+
+    public float getLineClearProgress(long now) {
+        if (clearingRows.length == 0) return 0.0F;
+        return Math.max(0.0F, Math.min(1.0F,
+            (float) (now - lineClearStartedAt) / LINE_CLEAR_ANIMATION_MS));
+    }
+
     public int getX() { return x; }
     public int getY() { return y; }
     public boolean hasStarted() { return started; }
@@ -304,6 +350,10 @@ public final class TetrisGame {
         snapshot.paused = paused;
         snapshot.gameOver = gameOver;
         snapshot.resultRecorded = resultRecorded;
+        snapshot.clearingRows = Arrays.copyOf(clearingRows, clearingRows.length);
+        snapshot.lineClearElapsedMs = clearingRows.length == 0 ? 0L
+            : Math.max(0L, Math.min(LINE_CLEAR_ANIMATION_MS,
+                System.currentTimeMillis() - lineClearStartedAt));
         return snapshot;
     }
 
@@ -341,6 +391,17 @@ public final class TetrisGame {
         game.paused = true;
         game.gameOver = snapshot.gameOver;
         game.resultRecorded = snapshot.resultRecorded;
+        if (snapshot.clearingRows != null && snapshot.clearingRows.length > 0) {
+            game.clearingRows = Arrays.stream(snapshot.clearingRows)
+                .filter(row -> row >= 0 && row < HEIGHT)
+                .distinct()
+                .toArray();
+            if (game.clearingRows.length > 0) {
+                long elapsed = Math.max(0L, Math.min(LINE_CLEAR_ANIMATION_MS, snapshot.lineClearElapsedMs));
+                game.lineClearStartedAt = System.currentTimeMillis() - elapsed;
+                game.currentType = -1;
+            }
+        }
         game.lastDropAt = System.currentTimeMillis();
         return game;
     }
@@ -364,5 +425,7 @@ public final class TetrisGame {
         public boolean paused;
         public boolean gameOver;
         public boolean resultRecorded;
+        public int[] clearingRows;
+        public long lineClearElapsedMs;
     }
 }
