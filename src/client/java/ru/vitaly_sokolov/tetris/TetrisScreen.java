@@ -3,6 +3,8 @@ package ru.vitaly_sokolov.tetris;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.network.chat.Component;
@@ -366,15 +368,18 @@ public final class TetrisScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) return false;
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
+        double mouseX = event.x();
+        double mouseY = event.y();
+
         for (UiButton uiButton : List.copyOf(buttons)) {
             if (uiButton.contains(mouseX, mouseY)) {
                 handleButton(uiButton.id());
                 return true;
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     private void handleButton(String id) {
@@ -420,7 +425,9 @@ public final class TetrisScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(KeyEvent event) {
+        int keyCode = event.key();
+
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
             onClose();
             return true;
@@ -437,7 +444,7 @@ public final class TetrisScreen extends Screen {
             }
             return true;
         }
-        if (view == View.RECORDS) return super.keyPressed(keyCode, scanCode, modifiers);
+        if (view == View.RECORDS) return super.keyPressed(event);
 
         if (game.hasStarted() && !game.isPaused() && !game.isGameOver()) {
             switch (keyCode) {
@@ -450,14 +457,15 @@ public final class TetrisScreen extends Screen {
                     game.pause();
                     storage.save(game);
                 }
-                default -> { return super.keyPressed(keyCode, scanCode, modifiers); }
+                default -> { return super.keyPressed(event); }
             }
             return true;
         }
 
         if (game.hasStarted() && game.isPaused()) {
             if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_SPACE) {
-                game.resume();
+                if (game.isGameOver()) startNewGame();
+                else game.resume();
                 return true;
             }
             if (keyCode == GLFW.GLFW_KEY_N) {
@@ -465,7 +473,7 @@ public final class TetrisScreen extends Screen {
                 return true;
             }
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
