@@ -200,14 +200,17 @@ public final class TetrisGame {
         int cleared = clearingRows.length;
         if (cleared == 0) return;
 
-        // Rows are stored bottom-to-top, so removing them in this order
-        // keeps the original indices valid while the board shifts downward.
-        for (int row : clearingRows) {
-            for (int move = row; move > 0; move--) {
-                board[move] = Arrays.copyOf(board[move - 1], WIDTH);
+        // Compact every surviving row once. This handles adjacent and
+        // separated clears without changing the meaning of saved row indices.
+        boolean[] remove = new boolean[HEIGHT];
+        for (int row : clearingRows) remove[row] = true;
+        int writeRow = HEIGHT - 1;
+        for (int readRow = HEIGHT - 1; readRow >= 0; readRow--) {
+            if (!remove[readRow]) {
+                board[writeRow--] = Arrays.copyOf(board[readRow], WIDTH);
             }
-            board[0] = new int[WIDTH];
         }
+        while (writeRow >= 0) board[writeRow--] = new int[WIDTH];
         clearingRows = new int[0];
         lineClearStartedAt = 0L;
 
@@ -403,6 +406,7 @@ public final class TetrisGame {
             }
         }
         game.lastDropAt = System.currentTimeMillis();
+        game.pausedAt = System.currentTimeMillis();
         return game;
     }
 
