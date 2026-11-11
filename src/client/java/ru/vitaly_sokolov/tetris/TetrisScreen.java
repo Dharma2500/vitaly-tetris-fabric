@@ -136,7 +136,7 @@ public final class TetrisScreen extends Screen {
         int statsY = panelY + 76;
         drawStat(graphics, "СЧЁТ", formatScore(game.getScore()), panelX + panelWidth / 6, statsY);
         drawStat(graphics, "УРОВЕНЬ", String.valueOf(game.getLevel()), center, statsY);
-        drawStat(graphics, "ЛИНИИ", String.valueOf(game.getLines()), panelX + panelWidth * 5 / 6, statsY);
+        drawStat(graphics, "ЛИНИИ / КОМБО", game.getLines() + " / ×" + game.getCombo(), panelX + panelWidth * 5 / 6, statsY);
 
         drawBoard(graphics);
         drawNext(graphics, boardY + cellSize * TetrisGame.HEIGHT + 13);
