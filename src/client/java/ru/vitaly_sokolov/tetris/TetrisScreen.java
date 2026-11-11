@@ -103,15 +103,10 @@ public final class TetrisScreen extends Screen {
         }
         fillBorder(graphics, panelX, panelY, panelWidth, panelHeight, 2, GOLD);
         fillBorder(graphics, panelX + 7, panelY + 7, panelWidth - 14, panelHeight - 14, 1, 0xFF76572C);
-        int corner = 22;
-        for (int x : new int[] {panelX + 12, panelX + panelWidth - 12 - corner}) {
-            for (int y : new int[] {panelY + 12, panelY + panelHeight - 12 - corner}) {
-                graphics.fill(x, y, x + corner, y + 2, PALE_GOLD);
-                graphics.fill(x, y, x + 2, y + corner, PALE_GOLD);
-                graphics.fill(x + 5, y + 5, x + corner - 2, y + 6, MUTED_GOLD);
-                graphics.fill(x + 5, y + 5, x + 6, y + corner - 2, MUTED_GOLD);
-            }
-        }
+        drawCorner(graphics, true, true);
+        drawCorner(graphics, false, true);
+        drawCorner(graphics, true, false);
+        drawCorner(graphics, false, false);
     }
 
     private void drawMenu(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -157,8 +152,7 @@ public final class TetrisScreen extends Screen {
         addButton(graphics, primaryId, primaryLabel, panelX + 24, buttonY, buttonWidth, 34, mouseX, mouseY);
         addButton(graphics, "new", "НОВАЯ", panelX + 24 + buttonWidth + gap, buttonY, buttonWidth, 34, mouseX, mouseY);
         addButton(graphics, "records", "РЕКОРДЫ", panelX + 24 + (buttonWidth + gap) * 2, buttonY, buttonWidth, 34, mouseX, mouseY);
-        drawCentered(graphics, "← → движение     ↑ поворот     ↓ мягкий сброс     SPACE — вниз",
-            center, buttonY - 19, 0xFF988A72);
+        drawControls(graphics, buttonY);
     }
 
     private void drawBoard(GuiGraphics graphics) {
@@ -197,6 +191,25 @@ public final class TetrisScreen extends Screen {
                     drawMaterial(graphics, cell.materialId(), boardX + col * cellSize, boardY + row * cellSize, cellSize);
                 }
             }
+        }
+
+        if (game.isLineClearAnimating()) {
+            drawLineClearEffect(graphics, System.currentTimeMillis());
+        }
+    }
+
+    private void drawLineClearEffect(GuiGraphics graphics, long now) {
+        float progress = game.getLineClearProgress(now);
+        float pulse = (float) Math.sin(progress * Math.PI);
+        int alpha = Math.round(pulse * 48.0F);
+        int glow = (alpha << 24) | 0x00E4B85E;
+        int boardWidth = cellSize * TetrisGame.WIDTH;
+        int sweepX = boardX + Math.min(boardWidth - 2, Math.round(progress * boardWidth));
+
+        for (int row : game.getClearingRows()) {
+            int y = boardY + row * cellSize;
+            graphics.fill(boardX, y, boardX + boardWidth, y + cellSize, glow);
+            graphics.fill(sweepX, y, sweepX + 2, y + cellSize, 0x88FFE7A5);
         }
     }
 
@@ -286,6 +299,49 @@ public final class TetrisScreen extends Screen {
         drawCentered(graphics, title, panelX + panelWidth / 2, y + 22, PALE_GOLD);
         drawCentered(graphics, line1, panelX + panelWidth / 2, y + 47, 0xFFE3D6C1);
         drawCentered(graphics, line2, panelX + panelWidth / 2, y + 68, 0xFFA99A83);
+    }
+
+    private void drawControls(GuiGraphics graphics, int buttonY) {
+        int left = panelX + 22;
+        int right = panelX + panelWidth - 22;
+        int top = buttonY - 45;
+        int center = panelX + panelWidth / 2;
+
+        graphics.fill(left, top, right, buttonY - 7, 0x55251B10);
+        graphics.fill(left + 8, top, right - 8, top + 1, 0x557C5D31);
+
+        drawCentered(graphics, "← / →  ДВИЖЕНИЕ      ↑  ПОВОРОТ",
+            center, top + 7, 0xFFB6A17D);
+        drawCentered(graphics, "↓  МЯГКИЙ СБРОС      SPACE  СБРОСИТЬ",
+            center, top + 21, 0xFFB6A17D);
+    }
+
+    private void drawCorner(GuiGraphics graphics, boolean left, boolean top) {
+        int cornerX = left ? panelX + 13 : panelX + panelWidth - 13;
+        int cornerY = top ? panelY + 13 : panelY + panelHeight - 13;
+        int length = 23;
+
+        int horizontalLeft = left ? cornerX : cornerX - length;
+        int horizontalRight = left ? cornerX + length : cornerX;
+        int horizontalY = top ? cornerY : cornerY - 2;
+        graphics.fill(horizontalLeft, horizontalY, horizontalRight, horizontalY + 2, PALE_GOLD);
+
+        int verticalX = left ? cornerX : cornerX - 2;
+        int verticalTop = top ? cornerY : cornerY - length;
+        graphics.fill(verticalX, verticalTop, verticalX + 2, verticalTop + length, PALE_GOLD);
+
+        // A shorter, thinner inner stroke mirrors the same corner direction.
+        int innerX = left ? cornerX + 5 : cornerX - 5;
+        int innerY = top ? cornerY + 5 : cornerY - 5;
+        int innerLength = 14;
+        int innerLeft = left ? innerX : innerX - innerLength;
+        int innerRight = left ? innerX + innerLength : innerX;
+        int innerHorizontalY = top ? innerY : innerY - 1;
+        graphics.fill(innerLeft, innerHorizontalY, innerRight, innerHorizontalY + 1, MUTED_GOLD);
+
+        int innerVerticalX = left ? innerX : innerX - 1;
+        int innerTop = top ? innerY : innerY - innerLength;
+        graphics.fill(innerVerticalX, innerTop, innerVerticalX + 1, innerTop + innerLength, MUTED_GOLD);
     }
 
     private void drawTitle(GuiGraphics graphics) {
